@@ -36,7 +36,7 @@ public:
     }
 
     void setNext(MallocMetadata *new_next) {
-        next = new_next;
+        MallocMetadata::next = new_next;
     }
 
     MallocMetadata *getPrev() const {
@@ -44,7 +44,7 @@ public:
     }
 
     void setPrev(MallocMetadata *new_prev) {
-        prev = new_prev;
+        MallocMetadata::prev = new_prev;
     }
 
     MallocMetadata(size_t new_size) {
@@ -99,6 +99,7 @@ void _addToBlockList(MallocMetadata *new_meta_data) {
     while (temp->getNext() != nullptr) {
         temp = temp->getNext();
     }
+
     temp->setNext(new_meta_data);
     new_meta_data->setPrev(temp);
 
@@ -106,17 +107,36 @@ void _addToBlockList(MallocMetadata *new_meta_data) {
 
 MallocMetadata *_findFirstFreeBlock(size_t size) {
     //no head
+    static int i = 0;
+    i++;
     if (!free_list_head) {
+        FILE* f = std::fopen("temp_out.txt", "a");
+        fprintf(f,"no head of list for request %d\n", i);
+        fclose(f);
+
         return nullptr;
     }
     MallocMetadata *temp = free_list_head;
     //finding the right block
-    while (!temp) {
+    while (temp) {
+        FILE *f = std::fopen("temp_out.txt", "a");
+        fprintf(f,"size available: %zd\n", temp->getSize());
+        fclose(f);
+
         if (temp->getSize() >= size && temp->isFree()) {
+            f = std::fopen("temp_out.txt", "a");
+            fprintf(f,"found block to assign request %d\n", i);
+            fclose(f);
+
             return temp;
         }
         temp = temp->getNext();
     }
+    FILE *f = std::fopen("temp_out.txt", "a");
+    fprintf(f,"\n\n");
+    fclose(f);
+
+
     return nullptr;
 }
 
@@ -153,6 +173,10 @@ void *smalloc(size_t size) {
     if (size <= 0 || size > TOO_BIG) {
         return NULL;
     }
+    FILE* f = std::fopen("temp_out.txt", "a");
+    fprintf(f,"size we need: %zd\n", size);
+    fclose(f);
+
     MallocMetadata *first_free_block = _findFirstFreeBlock(size);
     intptr_t *user_start_block;
 
@@ -164,27 +188,29 @@ void *smalloc(size_t size) {
         MallocMetadata *new_meta_data = (MallocMetadata *) prev_program_break;
         *new_meta_data = MallocMetadata(size);
         _addToBlockList(new_meta_data);
+        memory_stats.num_allocated_blocks++;
+        memory_stats.num_allocated_bytes += size;
+
         user_start_block = (intptr_t *) (prev_program_break);
     }
     else {
         //meaning that there is a freed block big enough for allocation
+
         first_free_block->setIsFree(false);
-        *user_start_block = (intptr_t) first_free_block;
+        user_start_block = (intptr_t*) first_free_block;
         memory_stats.num_free_blocks--;
         memory_stats.num_free_bytes -= first_free_block->getSize();
     }
-    *user_start_block += meta_size;
-    memory_stats.num_allocated_blocks++;
-    memory_stats.num_allocated_bytes += size;
+    user_start_block += meta_size;
     return (void *) user_start_block;
 }
 
 void *scalloc(size_t num, size_t size) {
-    void *new_room = smalloc(size);
+    void *new_room = smalloc(size * num);
     if (!new_room) {
         return NULL;
     }
-    new_room = memset(new_room, 0, size);
+    new_room = memset(new_room, 0, size * num);
     return new_room;
 }
 
@@ -198,13 +224,18 @@ void sfree(void *p) {
     if (meta->isFree()) {
         return;
     }
+    //MallocMetadata* temp = free_list_head;
     memory_stats.num_free_blocks++;
+/*
     FILE* f = std::fopen("temp_out.txt", "a");
-    //fprintf(f,"next meta: %d\n", meta->getNext());
-    //fprintf(f, "\n\n");
-    fprintf(f, "number of free bytes: %d\n", meta->getNext() == nullptr);
-    fprintf(f, "number of free bytes: %d\n", meta->getPrev() == nullptr);
+    while(temp){
+        fprintf(f,"next meta: %d\n", temp == meta);
+        temp = temp->getNext();
+    }
+    fprintf(f, "\n\n");
+    //fprintf(f, "number of free bytes: %zd\n", meta->getSize());
     fclose(f);
+*/
     meta->setIsFree(true);
     memory_stats.num_free_bytes += meta->getSize();
 }
@@ -212,6 +243,9 @@ void sfree(void *p) {
 void *srealloc(void *oldp, size_t size) {
     if (size <= 0 || size > TOO_BIG) {
         return NULL;
+    }
+    if(!oldp){
+        return smalloc(size);
     }
     intptr_t *p_size = (intptr_t *) (oldp);
     //assuming that p_size > meta_size
@@ -224,7 +258,8 @@ void *srealloc(void *oldp, size_t size) {
         void *new_allocated = smalloc(size);
         if (!new_allocated) {
             return NULL;
-        } else {
+        }
+        else {
             memmove(new_allocated, oldp, size);
             sfree(oldp);
             return new_allocated;
