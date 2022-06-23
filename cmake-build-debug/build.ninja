@@ -70,6 +70,13 @@ build CMakeFiles\WET.dir\malloc_2.cpp.obj: CXX_COMPILER__WET_Debug C$:\Users\Yeh
   TARGET_COMPILE_PDB = CMakeFiles\WET.dir\
   TARGET_PDB = WET.pdb
 
+build CMakeFiles\WET.dir\malloc_3.cpp.obj: CXX_COMPILER__WET_Debug C$:\Users\Yehonatan\Documents\Yehonatan\Technion\Semester_4\Operating$ Systems\HW4\WET\malloc_3.cpp || cmake_object_order_depends_target_WET
+  FLAGS = /DWIN32 /D_WINDOWS /EHsc /Zi /Ob0 /Od /RTC1 -MDd
+  OBJECT_DIR = CMakeFiles\WET.dir
+  OBJECT_FILE_DIR = CMakeFiles\WET.dir
+  TARGET_COMPILE_PDB = CMakeFiles\WET.dir\
+  TARGET_PDB = WET.pdb
+
 
 # =============================================================================
 # Link build statements for EXECUTABLE target WET
@@ -78,7 +85,7 @@ build CMakeFiles\WET.dir\malloc_2.cpp.obj: CXX_COMPILER__WET_Debug C$:\Users\Yeh
 #############################################
 # Link the executable WET.exe
 
-build WET.exe: CXX_EXECUTABLE_LINKER__WET_Debug CMakeFiles\WET.dir\main.cpp.obj CMakeFiles\WET.dir\malloc_1.cpp.obj CMakeFiles\WET.dir\malloc_2.cpp.obj
+build WET.exe: CXX_EXECUTABLE_LINKER__WET_Debug CMakeFiles\WET.dir\main.cpp.obj CMakeFiles\WET.dir\malloc_1.cpp.obj CMakeFiles\WET.dir\malloc_2.cpp.obj CMakeFiles\WET.dir\malloc_3.cpp.obj
   FLAGS = /DWIN32 /D_WINDOWS /EHsc /Zi /Ob0 /Od /RTC1 -MDd
   LINK_FLAGS = /machine:X86 /debug /INCREMENTAL /subsystem:console
   LINK_LIBRARIES = kernel32.lib user32.lib gdi32.lib winspool.lib shell32.lib ole32.lib oleaut32.lib uuid.lib comdlg32.lib advapi32.lib

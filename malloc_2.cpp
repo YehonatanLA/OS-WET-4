@@ -69,19 +69,6 @@ public:
 
 Stats::Stats() : num_free_blocks(0), num_free_bytes(0), num_allocated_blocks(0), num_allocated_bytes(0) {}
 
-/*class FreeList{
-    MallocMetadata* head;
-public:
-    FreeList();
-    ~FreeList();
-    void addBlock(MallocMetadata* new_block);
-    void removeBlock(MallocMetadata* old_block);
-};
-
-FreeList::FreeList() {
-    head = nullptr;
-}*/
-
 
 // Our global variables
 MallocMetadata *free_list_head = nullptr;
@@ -107,36 +94,18 @@ void _addToBlockList(MallocMetadata *new_meta_data) {
 
 MallocMetadata *_findFirstFreeBlock(size_t size) {
     //no head
-    static int i = 0;
-    i++;
     if (!free_list_head) {
-        FILE* f = std::fopen("temp_out.txt", "a");
-        fprintf(f,"no head of list for request %d\n", i);
-        fclose(f);
-
         return nullptr;
     }
     MallocMetadata *temp = free_list_head;
     //finding the right block
     while (temp) {
-        FILE *f = std::fopen("temp_out.txt", "a");
-        fprintf(f,"size available: %zd\n", temp->getSize());
-        fclose(f);
 
         if (temp->getSize() >= size && temp->isFree()) {
-            f = std::fopen("temp_out.txt", "a");
-            fprintf(f,"found block to assign request %d\n", i);
-            fclose(f);
-
             return temp;
         }
         temp = temp->getNext();
     }
-    FILE *f = std::fopen("temp_out.txt", "a");
-    fprintf(f,"\n\n");
-    fclose(f);
-
-
     return nullptr;
 }
 
@@ -169,13 +138,9 @@ size_t _size_meta_data() {
 /*The Malloc functions starts here*/
 
 void *smalloc(size_t size) {
-    //TODO: add statistics
     if (size <= 0 || size > TOO_BIG) {
         return NULL;
     }
-    FILE* f = std::fopen("temp_out.txt", "a");
-    fprintf(f,"size we need: %zd\n", size);
-    fclose(f);
 
     MallocMetadata *first_free_block = _findFirstFreeBlock(size);
     intptr_t *user_start_block;
@@ -224,18 +189,7 @@ void sfree(void *p) {
     if (meta->isFree()) {
         return;
     }
-    //MallocMetadata* temp = free_list_head;
     memory_stats.num_free_blocks++;
-/*
-    FILE* f = std::fopen("temp_out.txt", "a");
-    while(temp){
-        fprintf(f,"next meta: %d\n", temp == meta);
-        temp = temp->getNext();
-    }
-    fprintf(f, "\n\n");
-    //fprintf(f, "number of free bytes: %zd\n", meta->getSize());
-    fclose(f);
-*/
     meta->setIsFree(true);
     memory_stats.num_free_bytes += meta->getSize();
 }
