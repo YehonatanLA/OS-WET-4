@@ -1,3 +1,0 @@
-C:/Users/Yehonatan/Documents/Yehonatan/Technion/Semester_4/Operating Systems/HW4/WET/cmake-build-debug/CMakeFiles/WET.dir
-C:/Users/Yehonatan/Documents/Yehonatan/Technion/Semester_4/Operating Systems/HW4/WET/cmake-build-debug/CMakeFiles/edit_cache.dir
-C:/Users/Yehonatan/Documents/Yehonatan/Technion/Semester_4/Operating Systems/HW4/WET/cmake-build-debug/CMakeFiles/rebuild_cache.dir

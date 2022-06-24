@@ -1,17 +1,21 @@
 #include <unistd.h>
 #include <cstring>
 #include <cstdio>
+#include <sys/mman.h>
 
 #define TOO_BIG (100000000)
 
 
 #define SPLIT_AMOUNT (128)
 
+#define LARGE_MMAP (128*1024)
+
 class MallocMetadata {
 // Not a fan of the name
 private:
     size_t size;
     bool is_free;
+    bool is_mmap;
     MallocMetadata *next;
     MallocMetadata *prev;
 
@@ -31,6 +35,14 @@ public:
 
     void setIsFree(bool isFree) {
         is_free = isFree;
+    }
+
+    bool isMmap () const{
+        return is_mmap;
+    }
+
+    void setIsMmap(bool isMmap){
+        is_mmap = isMmap;
     }
 
     MallocMetadata *getNext() const {
@@ -54,6 +66,7 @@ public:
         is_free = false;
         next = nullptr;
         prev = nullptr;
+        is_mmap = false;
 
     }
 };
@@ -248,18 +261,20 @@ size_t _size_meta_data() {
 /*The Malloc functions starts here*/
 
 void *smalloc(size_t size) {
-    if (size <= 0 || size > TOO_BIG) {
-        return NULL;
+    size_t alloc_size = size + (8 - (size + meta_size) % 8) % 8;
+    printf("%d", alloc_size);
+    if (alloc_size <= 0 || alloc_size > TOO_BIG) {
+    return NULL;
     }
 
-    MallocMetadata *best_free_block = _findBestFreeBlock(size);
+    MallocMetadata *best_free_block = _findBestFreeBlock(alloc_size);
     intptr_t *user_start_block;
 
     if (!best_free_block) {
         intptr_t size_needed;
 
-        if (wilderness_block->isFree()) {
-            size_needed = (intptr_t) (size) - (intptr_t) (wilderness_block->getSize());
+        if (alloc_size < LARGE_MMAP && wilderness_block && wilderness_block->isFree() ) {
+            size_needed = (intptr_t) (alloc_size) - (intptr_t) (wilderness_block->getSize());
             void *prev_program_break = sbrk(size_needed);
             if (prev_program_break == (void *) (-1)) {
                 return NULL;
@@ -267,26 +282,37 @@ void *smalloc(size_t size) {
             //TODO: remove comments
             //memory_stats.num_allocated_bytes += size_needed;
             wilderness_block->setIsFree(false);
+            wilderness_block->setSize(alloc_size);
             return (void *) wilderness_block;
         }
-
         else {
-            void *prev_program_break = sbrk((intptr_t) (size) + meta_size);
+            void *prev_program_break = nullptr;
+            if(alloc_size >= LARGE_MMAP)
+            {
+                prev_program_break = mmap(NULL, alloc_size + meta_size, PROT_EXEC | PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, 0, 0);
+
+            } else {
+                prev_program_break = sbrk((intptr_t) (alloc_size) + meta_size);
+            }
             if (prev_program_break == (void *) (-1)) {
                 return NULL;
             }
             MallocMetadata *new_meta_data = (MallocMetadata *) prev_program_break;
-            *new_meta_data = MallocMetadata(size);
+            *new_meta_data = MallocMetadata(alloc_size);
+            if(alloc_size >= LARGE_MMAP)
+            {
+                new_meta_data->setIsMmap(true);
+            }
             _addToBlockList(new_meta_data);
             user_start_block = (intptr_t *) (prev_program_break);
             memory_stats.num_allocated_blocks++;
-            memory_stats.num_allocated_bytes += size;
+            memory_stats.num_allocated_bytes += alloc_size;
         }
     }
     else {
         //meaning that there is a freed block big enough for allocation
-        if (best_free_block->getSize() >= SPLIT_AMOUNT + meta_size + size) {
-            MallocMetadata *new_meta = _splitBlocks(best_free_block, size);
+        if (best_free_block->getSize() >= SPLIT_AMOUNT + meta_size + alloc_size) {
+            MallocMetadata *new_meta = _splitBlocks(best_free_block, alloc_size);
             _addToBlockList(new_meta);
         }
         best_free_block->setIsFree(false);
@@ -315,6 +341,7 @@ void sfree(void *p) {
     intptr_t *p_size = (intptr_t *) (p);
     //assuming that p_size > meta_size
     MallocMetadata *meta = (MallocMetadata *) (p_size - meta_size);
+
     if (meta->isFree()) {
         return;
     }
@@ -326,6 +353,9 @@ void sfree(void *p) {
     }
     memory_stats.num_free_blocks++;
     meta->setIsFree(true);
+    if (meta->isMmap()) {
+        munmap(meta, meta->getSize() + meta_size);
+    }
     memory_stats.num_free_bytes += meta->getSize();
 }
 

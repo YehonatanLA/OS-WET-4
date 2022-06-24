@@ -185,7 +185,7 @@ void sfree(void *p) {
     }
     intptr_t *p_size = (intptr_t *) (p);
     //assuming that p_size > meta_size
-    MallocMetadata *meta = (MallocMetadata *) (p_size - meta_size);
+    MallocMetadata *meta = ((MallocMetadata *)p) - meta_size;
     if (meta->isFree()) {
         return;
     }
