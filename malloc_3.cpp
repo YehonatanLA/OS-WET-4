@@ -4,62 +4,18 @@
 #include <sys/mman.h>
 
 #define TOO_BIG (100000000)
-
-
 #define SPLIT_AMOUNT (128)
-
 #define LARGE_MMAP (128*1024)
 
 class MallocMetadata {
 // Not a fan of the name
-private:
+public:
     size_t size;
+    size_t prev_size;
     bool is_free;
     bool is_mmap;
     MallocMetadata *next;
     MallocMetadata *prev;
-
-
-public:
-    size_t getSize() const {
-        return size;
-    }
-
-    void setSize(size_t new_size) {
-        MallocMetadata::size = new_size;
-    }
-
-    bool isFree() const {
-        return is_free;
-    }
-
-    void setIsFree(bool isFree) {
-        is_free = isFree;
-    }
-
-    bool isMmap () const{
-        return is_mmap;
-    }
-
-    void setIsMmap(bool isMmap){
-        is_mmap = isMmap;
-    }
-
-    MallocMetadata *getNext() const {
-        return next;
-    }
-
-    void setNext(MallocMetadata *new_next) {
-        MallocMetadata::next = new_next;
-    }
-
-    MallocMetadata *getPrev() const {
-        return prev;
-    }
-
-    void setPrev(MallocMetadata *new_prev) {
-        MallocMetadata::prev = new_prev;
-    }
 
     MallocMetadata(size_t new_size) {
         size = new_size;
@@ -83,16 +39,14 @@ public:
 };
 
 MallocMetadata *_splitBlocks(MallocMetadata *pMetadata, size_t size);
-
 void _mergeAdjacentBlocks(MallocMetadata *pMetadata, bool is_next_free, bool is_prev_free);
-
 void _removeFromBlockList(MallocMetadata *pMetadata);
-
 Stats::Stats() : num_free_blocks(0), num_free_bytes(0), num_allocated_blocks(0), num_allocated_bytes(0) {}
 
 
 // Our global variables
 MallocMetadata *free_list_head = nullptr;
+MallocMetadata *list_head = (MallocMetadata *) sbrk(0);
 intptr_t meta_size = (intptr_t) (sizeof(MallocMetadata));
 Stats memory_stats = Stats();
 MallocMetadata *wilderness_block = nullptr;
@@ -106,49 +60,33 @@ void _addToBlockList(MallocMetadata *new_meta_data) {
     }
     MallocMetadata *temp = free_list_head;
     //TODO: check pointer arithmetics
-    if ((size_t) (wilderness_block) < (size_t) (new_meta_data)) {
-        wilderness_block = new_meta_data;
-    }
 
-    while (temp->getNext() != nullptr) {
-        if (new_meta_data->getSize() <= temp->getSize()) {
-            break;
-        }
-        temp = temp->getNext();
-    }
-
-    while (temp->getNext() != nullptr && new_meta_data->getSize() == temp->getSize()) {
-        //TODO: check pointer arithmetics
-        if (new_meta_data < temp) {
-            break;
-        }
-        temp = temp->getNext();
-    }
-
-    if (!temp->getNext()) {
-        // *checking if new_meta_data is last or one before last
-        // *if not last node, just add it like any other node
-        if ((new_meta_data->getSize() > temp->getSize()) ||
-            (new_meta_data->getSize() == temp->getSize() && new_meta_data > temp)) {
-            // *is last node
-            temp->setNext(new_meta_data);
-            new_meta_data->setPrev(temp);
-            return;
-        }
-    }
-    else if (!temp->getPrev()) {
+    if (temp->size > new_meta_data->size || (temp->size == new_meta_data->size && temp > new_meta_data)) {
         // *adding as first node
         free_list_head = new_meta_data;
-        new_meta_data->setNext(temp);
-        temp->setPrev(new_meta_data);
+        new_meta_data->next = temp;
+        temp->prev = new_meta_data;
         return;
     }
-    // *any other case
-    new_meta_data->setNext(temp);
-    new_meta_data->setPrev(temp->getPrev());
-    temp->getPrev()->setNext(new_meta_data);
-    temp->setPrev(new_meta_data);
 
+    while (temp->next != nullptr &&
+            (new_meta_data->size > temp->next->size ||
+            new_meta_data->size == temp->next->size && new_meta_data > temp->next)) {
+        temp = temp->next;
+    }
+
+    if (!temp->next) {
+        // *checking if new_meta_data is last or one before last
+        // *if not last node, just add it like any other node
+        temp->next = new_meta_data;
+        new_meta_data->prev = temp;
+    } else {
+        // *any other case
+        new_meta_data->next = temp->next;
+        temp->next->prev = new_meta_data;
+        new_meta_data->prev = temp;
+        temp->next = new_meta_data;
+    }
 }
 
 MallocMetadata *_findBestFreeBlock(size_t size) {
@@ -156,14 +94,15 @@ MallocMetadata *_findBestFreeBlock(size_t size) {
     if (!free_list_head) {
         return nullptr;
     }
+
     MallocMetadata *temp = free_list_head;
+
     //finding the right block
     while (temp) {
-
-        if (temp->getSize() >= size && temp->isFree()) {
+        if (temp->size >= size && temp->is_free) {
             return temp;
         }
-        temp = temp->getNext();
+        temp = temp->next;
     }
     return nullptr;
 }
@@ -171,46 +110,73 @@ MallocMetadata *_findBestFreeBlock(size_t size) {
 MallocMetadata *_splitBlocks(MallocMetadata *pMetadata, size_t size) {
     //TODO: check the pointer arithmetics
     MallocMetadata *extra_meta_data = (MallocMetadata *) ((size_t) (pMetadata) + size + meta_size);
-    size_t size_diff = (size_t) (extra_meta_data - pMetadata);
-    *extra_meta_data = MallocMetadata(pMetadata->getSize() - size_diff - meta_size);
-    extra_meta_data->setIsFree(true);
-    pMetadata->setSize(size);
-    //TODO: remove comments
-    //memory_stats.num_allocated_blocks++;
-    //memory_stats.num_allocated_bytes -= meta_size;
-    //memory_stats.num_free_blocks++;
-    //memory_stats.num_free_bytes -= meta_size;
+    *extra_meta_data = MallocMetadata(pMetadata->size - size - meta_size);
+    extra_meta_data->prev_size = size;
+    extra_meta_data->is_free = true;
+    if (pMetadata != wilderness_block)
+    {
+        MallocMetadata *next_meta = (MallocMetadata* )((size_t) pMetadata + meta_size + pMetadata->size);
+        next_meta->prev_size = extra_meta_data->size;
+    }
+    pMetadata->size = size;
+
+    memory_stats.num_allocated_blocks++;
+    memory_stats.num_allocated_bytes -= meta_size;
+    memory_stats.num_free_blocks++;
+    memory_stats.num_free_bytes -= meta_size;
+
     return extra_meta_data;
 }
 
 void _mergeAdjacentBlocks(MallocMetadata *pMetadata, bool is_next_free, bool is_prev_free) {
+    MallocMetadata *prev_meta = (MallocMetadata* )((size_t)pMetadata - meta_size - pMetadata->prev_size);
+    MallocMetadata *next_meta = (MallocMetadata* )((size_t)pMetadata + meta_size + pMetadata->size);
     if (is_next_free && is_prev_free) {
-        MallocMetadata *prev_meta = pMetadata->getPrev();
-        size_t next_meta_size = pMetadata->getNext()->getSize();
-        prev_meta->setSize(prev_meta->getSize() + pMetadata->getSize() + next_meta_size + 2 * meta_size);
-        _removeFromBlockList(pMetadata->getNext());
+        prev_meta->size = prev_meta->size + pMetadata->size + next_meta->size + 2 * meta_size;
+        if (next_meta != wilderness_block)
+        {
+            MallocMetadata * new_next_meta = (MallocMetadata* )((size_t)prev_meta + meta_size + prev_meta->size);
+            new_next_meta->prev_size = prev_meta->size;
+        }
         _removeFromBlockList(pMetadata);
-        //TODO: remove comments
-        //memory_stats.num_free_blocks -= 2;
-        // memory_stats.num_free_bytes += meta_size * 2;
+        _removeFromBlockList(next_meta);
+
+        memory_stats.num_free_blocks -= 2;
+        memory_stats.num_allocated_blocks -= 2;
+        memory_stats.num_allocated_bytes += meta_size * 2;
+        memory_stats.num_free_bytes += meta_size * 2 + pMetadata->size;
     }
     else if (is_prev_free) {
         // only is_prev_free == true
-        MallocMetadata *prev_meta = pMetadata->getPrev();
-        prev_meta->setSize(prev_meta->getSize() + pMetadata->getSize() + meta_size);
+        prev_meta->size = prev_meta->size + pMetadata->size + meta_size;
+        if (next_meta != wilderness_block)
+        {
+            MallocMetadata * new_next_meta = (MallocMetadata* )((size_t)prev_meta + meta_size + prev_meta->size);
+            new_next_meta->prev_size = prev_meta->size;
+        }
         _removeFromBlockList(pMetadata);
-        //TODO: remove comments
-        //memory_stats.num_free_blocks --;
-        // memory_stats.num_free_bytes += meta_size;
+
+        memory_stats.num_free_bytes += meta_size + pMetadata->size;
+        memory_stats.num_free_blocks --;
+        memory_stats.num_allocated_bytes += meta_size;
+        memory_stats.num_allocated_blocks --;
     }
     else {
         //only is_next_free == true
-        size_t next_meta_size = pMetadata->getNext()->getSize();
-        pMetadata->setSize(pMetadata->getSize() + next_meta_size + meta_size);
-        _removeFromBlockList(pMetadata->getNext());
-        //TODO: remove comments
-        //memory_stats.num_free_blocks --;
-        // memory_stats.num_free_bytes += meta_size;
+        size_t next_meta_size = next_meta->size;
+        memory_stats.num_free_bytes += meta_size + pMetadata->size;
+        pMetadata->size = pMetadata->size + next_meta_size + meta_size;
+        if (pMetadata != wilderness_block)
+        {
+            MallocMetadata *new_next_meta = (MallocMetadata *) ((size_t) pMetadata + meta_size + pMetadata->size);
+            new_next_meta->prev_size = pMetadata->size;
+        }
+        _removeFromBlockList(next_meta);
+
+
+        memory_stats.num_free_blocks --;
+        memory_stats.num_allocated_bytes += meta_size;
+        memory_stats.num_allocated_blocks --;
     }
 }
 
@@ -218,17 +184,16 @@ void _removeFromBlockList(MallocMetadata *pMetadata) {
     //function assumes has the list has at least two items, since the only call will be from mergeAdjacent
     //also assumes that the first block won't be removed, since we only remove blocks whom where
     // merged to their prev (or the next merged to current)
-    if (!pMetadata->getNext()) {
+    if (pMetadata == wilderness_block) {
         //last node
-        wilderness_block = pMetadata->getPrev();
-        pMetadata->getPrev()->setNext(nullptr);
-        pMetadata->getPrev()->setNext(nullptr);
+        wilderness_block = (MallocMetadata *)((size_t) pMetadata - pMetadata->prev_size - meta_size);
+        if (pMetadata->prev) pMetadata->prev->next = nullptr;
     }
     else {
-        pMetadata->getPrev()->setNext(pMetadata->getNext());
-        pMetadata->setPrev(nullptr);
-        pMetadata->getNext()->setPrev(pMetadata->getPrev());
-        pMetadata->setNext(nullptr);
+        if (pMetadata->prev) pMetadata->prev->next = pMetadata->next;
+        pMetadata->prev = nullptr;
+        if (pMetadata->next) pMetadata->next->prev = pMetadata->prev;
+        pMetadata->next = nullptr;
     }
 
 }
@@ -262,7 +227,6 @@ size_t _size_meta_data() {
 
 void *smalloc(size_t size) {
     size_t alloc_size = size + (8 - (size + meta_size) % 8) % 8;
-    printf("%d", alloc_size);
     if (alloc_size <= 0 || alloc_size > TOO_BIG) {
     return NULL;
     }
@@ -271,26 +235,30 @@ void *smalloc(size_t size) {
     intptr_t *user_start_block;
 
     if (!best_free_block) {
-        intptr_t size_needed;
 
-        if (alloc_size < LARGE_MMAP && wilderness_block && wilderness_block->isFree() ) {
-            size_needed = (intptr_t) (alloc_size) - (intptr_t) (wilderness_block->getSize());
+        if (alloc_size < LARGE_MMAP && wilderness_block && wilderness_block->is_free) {
+            intptr_t size_needed;
+            size_needed = (intptr_t) (alloc_size) - (intptr_t) (wilderness_block->size);
             void *prev_program_break = sbrk(size_needed);
             if (prev_program_break == (void *) (-1)) {
                 return NULL;
             }
+
             //TODO: remove comments
-            //memory_stats.num_allocated_bytes += size_needed;
-            wilderness_block->setIsFree(false);
-            wilderness_block->setSize(alloc_size);
-            return (void *) wilderness_block;
+            memory_stats.num_allocated_bytes += size_needed;
+            memory_stats.num_free_blocks--;
+            memory_stats.num_free_bytes -= wilderness_block->size;
+
+            wilderness_block->is_free = false;
+            wilderness_block->size = alloc_size;
+            user_start_block = (intptr_t *) wilderness_block;
+
         }
         else {
             void *prev_program_break = nullptr;
             if(alloc_size >= LARGE_MMAP)
             {
                 prev_program_break = mmap(NULL, alloc_size + meta_size, PROT_EXEC | PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, 0, 0);
-
             } else {
                 prev_program_break = sbrk((intptr_t) (alloc_size) + meta_size);
             }
@@ -301,8 +269,14 @@ void *smalloc(size_t size) {
             *new_meta_data = MallocMetadata(alloc_size);
             if(alloc_size >= LARGE_MMAP)
             {
-                new_meta_data->setIsMmap(true);
+                new_meta_data->is_mmap = true;
             }
+            if (wilderness_block) {
+                new_meta_data->prev_size = wilderness_block->size;
+            } else {
+                new_meta_data->prev_size = 0;
+            }
+            wilderness_block = new_meta_data;
             _addToBlockList(new_meta_data);
             user_start_block = (intptr_t *) (prev_program_break);
             memory_stats.num_allocated_blocks++;
@@ -311,14 +285,14 @@ void *smalloc(size_t size) {
     }
     else {
         //meaning that there is a freed block big enough for allocation
-        if (best_free_block->getSize() >= SPLIT_AMOUNT + meta_size + alloc_size) {
+        if (best_free_block->size >= SPLIT_AMOUNT + meta_size + alloc_size) {
             MallocMetadata *new_meta = _splitBlocks(best_free_block, alloc_size);
             _addToBlockList(new_meta);
         }
-        best_free_block->setIsFree(false);
+        best_free_block->is_free = false;
         user_start_block = (intptr_t *) best_free_block;
         memory_stats.num_free_blocks--;
-        memory_stats.num_free_bytes -= best_free_block->getSize();
+        memory_stats.num_free_bytes -= best_free_block->size;
     }
     user_start_block += meta_size;
     return (void *) user_start_block;
@@ -342,21 +316,34 @@ void sfree(void *p) {
     //assuming that p_size > meta_size
     MallocMetadata *meta = (MallocMetadata *) (p_size - meta_size);
 
-    if (meta->isFree()) {
+    if (meta->is_free) {
         return;
     }
-    bool is_next_free = meta->getNext() && meta->getNext()->isFree();
-    bool is_prev_free = meta->getPrev() && meta->getPrev()->isFree();
+    if (meta->is_mmap) {
+        munmap(meta, meta->size + meta_size);
+        return;
+    }
+
+//    if (meta != wilderness_block)
+//        printf("\nSize: %zu, prev block size is %zu, next block is %zu\n", meta->size, meta->prev_size, ((MallocMetadata *)((size_t) meta + meta_size + meta->size))->size);
+//    else
+//        printf("\nSize: %zu, prev block size is %zu\n", meta->size, meta->prev_size);
+
+    bool is_next_free = meta != wilderness_block && ((MallocMetadata *)((size_t) meta + meta_size + meta->size))->is_free;
+    bool is_prev_free = meta != list_head && ((MallocMetadata *)((size_t) meta - meta->prev_size - meta_size))->is_free;
 
     if (is_next_free || is_prev_free) {
         _mergeAdjacentBlocks(meta, is_next_free, is_prev_free);
+    } else
+    {
+        memory_stats.num_free_bytes += meta->size;
     }
+
     memory_stats.num_free_blocks++;
-    meta->setIsFree(true);
-    if (meta->isMmap()) {
-        munmap(meta, meta->getSize() + meta_size);
-    }
-    memory_stats.num_free_bytes += meta->getSize();
+    meta->is_free = true;
+
+
+
 }
 
 
@@ -371,7 +358,7 @@ void *srealloc(void *oldp, size_t size) {
     //assuming that p_size > meta_size
     MallocMetadata *meta = (MallocMetadata *) (p_size - meta_size);
 
-    if (size <= meta->getSize()) {
+    if (size <= meta->size) {
         return oldp;
     }
     else {
