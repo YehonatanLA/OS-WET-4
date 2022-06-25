@@ -2,4 +2,4 @@ project(WET)
 
 set(CMAKE_CXX_STANDARD 11)
 
-add_executable(WET hussam_tests/main3.cpp)
+add_executable(WET "Niv tests/main.cpp")
