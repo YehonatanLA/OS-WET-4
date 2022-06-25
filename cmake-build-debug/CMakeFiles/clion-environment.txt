@@ -1,4 +1,4 @@
-ToolSet: 16.0 (local)@C:\Program Files (x86)\Microsoft Visual Studio\2019\Community
+ToolSet: Ubuntu 20.04.3 LTS (local)@C:\Users\adibo\AppData\Local\Microsoft\WindowsApps\ubuntu.exe
 Options: 
 
-Options:-DCMAKE_MAKE_PROGRAM=C:/Program Files/JetBrains/CLion 2020.3.1/bin/ninja/win/ninja.exe
+Options:

@@ -2,4 +2,4 @@ project(WET)
 
 set(CMAKE_CXX_STANDARD 11)
 
-add_executable(WET main.cpp malloc_3.cpp)
+add_executable(WET "Hussam tests/main3.cpp")

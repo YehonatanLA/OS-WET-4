@@ -1,16 +1,4 @@
-"C:\Program Files\JetBrains\CLion 2020.3.1\bin\cmake\win\bin\cmake.exe" -DCMAKE_BUILD_TYPE=Debug "-DCMAKE_MAKE_PROGRAM=C:/Program Files/JetBrains/CLion 2020.3.1/bin/ninja/win/ninja.exe" -G Ninja -S "C:\Users\Yehonatan\Documents\Yehonatan\Technion\Semester_4\Operating Systems\HW4\WET" -B "C:\Users\Yehonatan\Documents\Yehonatan\Technion\Semester_4\Operating Systems\HW4\WET\cmake-build-debug"
--- The C compiler identification is MSVC 19.29.30138.0
--- The CXX compiler identification is MSVC 19.29.30138.0
--- Detecting C compiler ABI info
--- Detecting C compiler ABI info - done
--- Check for working C compiler: C:/Program Files (x86)/Microsoft Visual Studio/2019/Community/VC/Tools/MSVC/14.29.30133/bin/Hostx86/x86/cl.exe - skipped
--- Detecting C compile features
--- Detecting C compile features - done
--- Detecting CXX compiler ABI info
--- Detecting CXX compiler ABI info - done
--- Check for working CXX compiler: C:/Program Files (x86)/Microsoft Visual Studio/2019/Community/VC/Tools/MSVC/14.29.30133/bin/Hostx86/x86/cl.exe - skipped
--- Detecting CXX compile features
--- Detecting CXX compile features - done
+/usr/bin/cmake -DCMAKE_BUILD_TYPE=Debug -G "CodeBlocks - Unix Makefiles" /mnt/c/Users/adibo/CLionProjects/OS-WET-4
 -- Configuring done
 -- Generating done
--- Build files have been written to: C:/Users/Yehonatan/Documents/Yehonatan/Technion/Semester_4/Operating Systems/HW4/WET/cmake-build-debug
+-- Build files have been written to: /mnt/c/Users/adibo/CLionProjects/OS-WET-4/cmake-build-debug
