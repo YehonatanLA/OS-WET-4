@@ -402,7 +402,7 @@ void *srealloc(void *oldp, size_t size) {
     // priority a
     if (size <= meta->size)
     {
-        _splitBlocks(prev_meta, size);
+        _splitBlocks(meta, size);
         return oldp;
     }
 
